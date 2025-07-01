@@ -20,18 +20,20 @@ const (
 				CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 `
 
-	GetAllTasksQuery           = `SELECT * FROM tasks;`
-	GetTaskByIDQuery           = `SELECT * FROM tasks WHERE id = $1;`
-	GetAllTasksByUserIdQuery   = `SELECT * FROM tasks WHERE user_id = $1;`
-	GetLastTaskByUserIdQuery   = `SELECT * FROM tasks WHERE user_id = $1 limit 1;`
+	GetAllTasksQuery           = `SELECT id, user_id, title, description, status, created_at FROM tasks;`
+	GetTaskByIdQuery           = `SELECT id, user_id, title, description, status, created_at FROM tasks WHERE id = $1;`
+	GetAllTasksByUserIdQuery   = `SELECT id, user_id, title, description, status, created_at FROM tasks WHERE user_id = $1;`
+	GetLastTaskByUserIdQuery   = `SELECT id, user_id, title, description, status, created_at FROM tasks WHERE user_id = $1 limit 1;`
 	GetAllTasksByUserNameQuery = `SELECT t.* FROM user AS u LEFT JOIN tasks AS t ON t.user_id = u.id WHERE u.username = $1;`
 
 	CreateTaskQuery = `INSERT INTO tasks (user_id, title, description) SELECT $1, $2, $3 
-					   WHERE EXISTS (SELECT 1 FROM users WHERE id = $1) RETURNING id;`
+					   WHERE EXISTS (SELECT 1 FROM users WHERE id = $1);`
 
-	UpdateTaskStatusByIDQuery = `UPDATE tasks SET status = $1 WHERE user_id = $2;`
+	UpdateTaskStatusByIDQuery = `UPDATE tasks SET status = $1 WHERE id = $2;`
 
-	DeleteTaskByIDQuery = `DELETE FROM tasks WHERE id = $1;`
+	DeleteTaskByIdQuery = `DELETE FROM tasks WHERE id = $1;`
 
-	CreateUserQuery = `INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id;`
+	CreateUserQuery    = `INSERT INTO users (username, password) VALUES ($1, $2);`
+	GetUserByIdQuery   = `SELECT id, username, password, created_at FROM users WHERE id = $1;`
+	GetUserByNameQuery = `SELECT id, username, password, created_at FROM users WHERE username = $1;`
 )

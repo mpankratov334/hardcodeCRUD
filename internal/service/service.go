@@ -27,6 +27,13 @@ type service struct {
 	log  *zap.SugaredLogger
 }
 
+func NewService(repo repo2.Repository, logger *zap.SugaredLogger) Service {
+	return &service{
+		repo: repo,
+		log:  logger,
+	}
+}
+
 func (s *service) CreateTask(ctx *fiber.Ctx) error {
 	var obj PostRequest
 
@@ -71,18 +78,17 @@ func (s *service) GetTasksByUserName(ctx *fiber.Ctx) error {
 
 	// Validation
 	if vErr := validator.Validate(ctx.Context(), req); vErr != nil {
-		s.log.Error("Invalid request id", zap.Error(vErr))
+		s.log.Error("Invalid request", zap.Error(vErr))
 		return dto.BadResponseError(ctx, dto.FieldIncorrect, vErr.Error())
 	}
 
 	// Gets from memory
 	objPtr, err := s.repo.GetTasksByUserName(ctx.Context(), req.Name)
-	if errors.Is(err, errors.New("invalid id")) {
-		s.log.Error("Failed to get task", zap.Error(err))
-		return dto.BadResponseError(ctx, dto.NotFound, err.Error())
-	}
 	if err != nil {
-		s.log.Error("Failed to parse id", zap.Error(err))
+		s.log.Error("Failed to get task", zap.Error(err))
+		if errors.Is(err, dto.ErrNotFound) {
+			return dto.NotFoundError(ctx, dto.NotFound, err.Error())
+		}
 		return dto.InternalServerError(ctx)
 	}
 
@@ -96,14 +102,14 @@ func (s *service) GetTasksByUserName(ctx *fiber.Ctx) error {
 
 func (s *service) GetAllTasks(ctx *fiber.Ctx) error {
 	// Gets from memory
-	objPtr, err := s.repo.GetAllTasks(ctx.Context())
+	obj, err := s.repo.GetAllTasks(ctx.Context())
 	if err != nil {
 		s.log.Error("Failed to get task", zap.Error(err))
 		return dto.InternalServerError(ctx)
 	}
 
 	// Forms answer
-	jsonData, err := json.Marshal(*objPtr)
+	jsonData, err := json.Marshal(obj)
 	if err != nil {
 		s.log.Error("Failed to marshal response", zap.Error(err))
 		return dto.InternalServerError(ctx)
@@ -112,7 +118,7 @@ func (s *service) GetAllTasks(ctx *fiber.Ctx) error {
 		Status: "success",
 		Data:   jsonData,
 	}
-	s.log.Info("whole memory was read and sent")
+	s.log.Info("all tasks was read and sent")
 	return ctx.Status(fiber.StatusOK).JSON(response)
 }
 
@@ -127,12 +133,8 @@ func (s *service) GetTaskByID(ctx *fiber.Ctx) error {
 
 	// Gets from memory
 	objPtr, err := s.repo.GetTaskByID(ctx.Context(), req.ID)
-	if errors.Is(err, errors.New("invalid id")) {
-		s.log.Error("Failed to get task", zap.Error(err))
-		return dto.BadResponseError(ctx, dto.NotFound, err.Error())
-	}
 	if err != nil {
-		s.log.Error("Failed to parse id", zap.Error(err))
+		s.log.Error("Failed to get task", zap.Error(err))
 		return dto.InternalServerError(ctx)
 	}
 
@@ -155,12 +157,11 @@ func (s *service) GetLastTaskByUserID(ctx *fiber.Ctx) error {
 
 	// Gets from memory
 	objPtr, err := s.repo.GetLastTaskByUserID(ctx.Context(), req.ID)
-	if errors.Is(err, errors.New("invalid id")) {
-		s.log.Error("Failed to get task", zap.Error(err))
-		return dto.BadResponseError(ctx, dto.NotFound, err.Error())
-	}
 	if err != nil {
-		s.log.Error("Failed to parse id", zap.Error(err))
+		s.log.Error("Failed to get task", zap.Error(err))
+		if errors.Is(err, dto.ErrNotFound) {
+			return dto.NotFoundError(ctx, dto.NotFound, err.Error())
+		}
 		return dto.InternalServerError(ctx)
 	}
 
@@ -181,13 +182,16 @@ func (s *service) GetAllTasksByUserID(ctx *fiber.Ctx) error {
 		return dto.BadResponseError(ctx, dto.FieldIncorrect, vErr.Error())
 	}
 
-	objPtr, err := s.repo.GetAllTasksByUserID(ctx.Context(), req.ID)
+	obj, err := s.repo.GetAllTasksByUserID(ctx.Context(), req.ID)
 	if err != nil {
 		s.log.Error("Failed to get task", zap.Error(err))
+		if errors.Is(err, dto.ErrNotFound) {
+			return dto.NotFoundError(ctx, dto.NotFound, err.Error())
+		}
 		return dto.InternalServerError(ctx)
 	}
 
-	jsonData, err := json.Marshal(*objPtr)
+	jsonData, err := json.Marshal(obj)
 	if err != nil {
 		s.log.Error("Failed to marshal response", zap.Error(err))
 		return dto.InternalServerError(ctx)
@@ -211,12 +215,11 @@ func (s *service) UpdateStatusByID(ctx *fiber.Ctx) error {
 
 	// Gets from memory
 	err := s.repo.UpdateStatusByID(ctx.Context(), req.ID, req.Status)
-	if errors.Is(err, errors.New("invalid id")) {
-		s.log.Error("Failed to get task", zap.Error(err))
-		return dto.BadResponseError(ctx, dto.NotFound, err.Error())
-	}
 	if err != nil {
-		s.log.Error("Failed to parse id", zap.Error(err))
+		s.log.Error("Failed to get task", zap.Error(err))
+		if errors.Is(err, dto.ErrNotFound) {
+			return dto.NotFoundError(ctx, dto.NotFound, err.Error())
+		}
 		return dto.InternalServerError(ctx)
 	}
 
@@ -238,12 +241,11 @@ func (s *service) DeleteTaskByID(ctx *fiber.Ctx) error {
 
 	// Gets from memory
 	err := s.repo.DeleteTaskByID(ctx.Context(), req.ID)
-	if errors.Is(err, errors.New("invalid id")) {
-		s.log.Error("Failed to get task", zap.Error(err))
-		return dto.BadResponseError(ctx, dto.NotFound, err.Error())
-	}
 	if err != nil {
-		s.log.Error("Failed to parse id", zap.Error(err))
+		s.log.Error("Failed to get task", zap.Error(err))
+		if errors.Is(err, dto.ErrNotFound) {
+			return dto.NotFoundError(ctx, dto.NotFound, err.Error())
+		}
 		return dto.InternalServerError(ctx)
 	}
 
@@ -288,11 +290,4 @@ func (s *service) CreateUser(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(response)
-}
-
-func NewService(repo repo2.Repository, logger *zap.SugaredLogger) Service {
-	return &service{
-		repo: repo,
-		log:  logger,
-	}
 }
