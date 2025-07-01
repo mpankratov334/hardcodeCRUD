@@ -28,7 +28,7 @@ func NewRouters(r *Routers, token string) *fiber.App {
 	apiGroup.Get("/tasks/all", r.Service.GetAllTasks)
 	apiGroup.Get("/tasks/users/:id", r.Service.GetAllTasksByUserID)
 	apiGroup.Delete("/tasks/:id", r.Service.DeleteTaskByID)
-	apiGroup.Put("/tasks/:id", r.Service.UpdateStatusByID)
+	apiGroup.Put("/tasks/:id/:status", r.Service.UpdateStatusByID)
 	apiGroup.Get("tasks/users/:id/last", r.Service.GetLastTaskByUserID)
 	apiGroup.Get("tasks/:id", r.Service.GetTaskByID)
 	apiGroup.Get("tasks/users/:username", r.Service.GetTasksByUserName)

@@ -2,7 +2,7 @@ package service_test
 
 import (
 	"encoding/json"
-	"fmt"
+	"github.com/jackc/pgx/v5"
 	"io"
 	"net/http/httptest"
 	"testing"
@@ -42,117 +42,79 @@ func TestService_GetTaskByID_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/tasks/123", nil)
 	// Вызов тестируемого метода
 	// получение реального ответа
-	fmt.Println("\n", "here")
 	realRow, err := app.Test(req)
 	body, _ := io.ReadAll(realRow.Body)
 	var real dto.Response
 
-	// ТИП ANY ДАМЫ И ГОСПОДА
 	// парсинг ответа
 	_ = json.Unmarshal(body, &real)
 	rData, _ := real.Data.(map[string]interface{})
 	rDesc, _ := rData["data"].(string)
+	var expErr *dto.Error
 
 	// Проверки
-	fmt.Println("\n", rData)
-	fmt.Println()
 	assert.Equal(t, expectedTask.Data, rDesc)
-	assert.Equal(t, nil, real.Error)
+	assert.Equal(t, expErr, real.Error)
 	assert.Equal(t, "success", real.Status)
 	assert.NoError(t, err)
 
 	mockRepo.AssertExpectations(t)
 }
 
-//
-//func TestService_GetTaskByID_ValidationError(t *testing.T) {
-//	mockRepo := new(mocks.Repository)
-//	logger := zap.NewNop().Sugar()
-//	svc := service.NewService(mockRepo, logger)
-//
-//	// Создание тестового контекста
-//	app := fiber.New()
-//	ctx := app.AcquireCtx(&fasthttp.RequestCtx{})
-//	defer app.ReleaseCtx(ctx)
-//
-//	// Пустой ID (вызовет ошибку валидации)
-//	ctx.Params("id", "")
-//
-//	// Вызов метода
-//	err := svc.GetTaskByID(ctx)
-//
-//	// Проверки
-//	assert.NoError(t, err)
-//	assert.Equal(t, fiber.StatusBadRequest, ctx.Response().StatusCode())
-//
-//	var errorResp dto.Response
-//	_ = json.Unmarshal(ctx.Response().Body(), &errorResp)
-//	assert.Equal(t, "error", errorResp.Status)
-//	assert.Equal(t, dto.FieldIncorrect, errorResp.Error.Code)
-//	assert.Contains(t, errorResp.Error.Desc, "RequestWithId.ID")
-//
-//	mockRepo.AssertNotCalled(t, "GetTaskByID")
-//}
-//
-//func TestService_GetTaskByID_RepositoryError(t *testing.T) {
-//	mockRepo := new(mocks.Repository)
-//	logger := zap.NewNop().Sugar()
-//	svc := service.NewService(mockRepo, logger)
-//
-//	// Создание тестового контекста
-//	app := fiber.New()
-//	ctx := app.AcquireCtx(&fasthttp.RequestCtx{})
-//	defer app.ReleaseCtx(ctx)
-//
-//	// Корректный ID
-//	ctx.Params("id", "123")
-//
-//	// Настройка мока на возврат ошибки
-//	mockRepo.On("GetTaskByID", mock.Anything, "123").Return(nil, errors.New("database error"))
-//
-//	// Вызов метода
-//	err := svc.GetTaskByID(ctx)
-//
-//	// Проверки
-//	assert.NoError(t, err)
-//	assert.Equal(t, fiber.StatusInternalServerError, ctx.Response().StatusCode())
-//
-//	var errorResp dto.Response
-//	_ = json.Unmarshal(ctx.Response().Body(), &errorResp)
-//	assert.Equal(t, "error", errorResp.Status)
-//	assert.Equal(t, dto.ServiceUnavailable, errorResp.Error.Code)
-//	assert.Equal(t, dto.InternalError, errorResp.Error.Desc)
-//
-//	mockRepo.AssertExpectations(t)
-//}
-//
-//func TestService_GetTaskByID_NotFound(t *testing.T) {
-//	mockRepo := new(mocks.Repository)
-//	logger := zap.NewNop().Sugar()
-//	svc := service.NewService(mockRepo, logger)
-//
-//	// Создание тестового контекста
-//	app := fiber.New()
-//	ctx := app.AcquireCtx(&fasthttp.RequestCtx{})
-//	defer app.ReleaseCtx(ctx)
-//
-//	// Корректный ID
-//	ctx.Params("id", "999")
-//
-//	// Настройка мока на возврат nil (объект не найден)
-//	mockRepo.On("GetTaskByID", mock.Anything, "999").Return(nil, nil)
-//
-//	// Вызов метода
-//	err := svc.GetTaskByID(ctx)
-//
-//	// Проверки
-//	assert.NoError(t, err)
-//	assert.Equal(t, fiber.StatusOK, ctx.Response().StatusCode())
-//
-//	var response dto.Response
-//	_ = json.Unmarshal(ctx.Response().Body(), &response)
-//	assert.Equal(t, "success", response.Status)
-//	assert.Nil(t, response.Data)
-//
-//	mockRepo.AssertExpectations(t)
-//}
+func TestService_GetTaskByID_InvalidID(t *testing.T) {
+	mockRepo := new(mocks.Repository)
+	svc := service.NewService(mockRepo, zap.NewNop().Sugar())
+
+	app := fiber.New()
+	app.Get("/tasks/:id", svc.GetTaskByID)
+
+	// Пустой ID в пути вызовет ошибку валидации
+	req := httptest.NewRequest("GET", "/tasks/1,2", nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var response dto.Response
+	_ = json.Unmarshal(body, &response)
+
+	// Проверяем структуру ошибки
+	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "error", response.Status)
+	assert.Nil(t, response.Data)
+	assert.NotNil(t, response.Error)
+	assert.Equal(t, dto.FieldIncorrect, response.Error.Code)
+
+	// Репозиторий не должен вызываться
+	mockRepo.AssertNotCalled(t, "GetTaskByID")
+}
+
+func TestService_GetTaskByID_NotFound(t *testing.T) {
+	mockRepo := new(mocks.Repository)
+	svc := service.NewService(mockRepo, zap.NewNop().Sugar())
+
+	app := fiber.New()
+	app.Get("/tasks/:id", svc.GetTaskByID)
+
+	// Настраиваем мок для возврата ошибки
+	mockRepo.On("GetTaskByID", mock.Anything, "999").Return(nil, pgx.ErrNoRows)
+
+	req := httptest.NewRequest("GET", "/tasks/999", nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var response dto.Response
+	_ = json.Unmarshal(body, &response)
+
+	// Проверяем
+	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, "error", response.Status)
+	assert.Nil(t, response.Data)
+	assert.NotNil(t, response.Error)
+	assert.Equal(t, dto.ServiceUnavailable, response.Error.Code)
+	assert.Equal(t, dto.InternalError, response.Error.Desc)
+
+	mockRepo.AssertExpectations(t)
+}

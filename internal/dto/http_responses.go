@@ -42,7 +42,7 @@ func BadResponseError(ctx *fiber.Ctx, code, desc string) error {
 }
 
 func NotFoundError(ctx *fiber.Ctx, code, desc string) error {
-	return ctx.Status(fiber.StatusBadRequest).JSON(Response{
+	return ctx.Status(fiber.StatusNotFound).JSON(Response{
 		Status: "error",
 		Error: &Error{
 			Code: code,
